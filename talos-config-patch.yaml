@@ -1,0 +1,27 @@
+machine:
+  kubelet:
+    extraArgs:
+      feature-gates: ImageVolume=true
+
+cluster:
+  apiServer:
+    extraArgs:
+      feature-gates: ImageVolume=true
+    # Commenting out PSP configuration as it may be causing issues
+    # admissionControl:
+    #   - name: PodSecurity
+    #     configuration:
+    #       apiVersion: pod-security.admission.config.k8s.io/v1alpha1
+    #       defaults:
+    #         enforce: privileged
+    #         enforce-version: latest
+    #         audit: privileged
+    #         audit-version: latest
+    #         warn: privileged
+    #         warn-version: latest
+  controllerManager:
+    extraArgs:
+      feature-gates: ImageVolume=true
+  scheduler:
+    extraArgs:
+      feature-gates: ImageVolume=true
