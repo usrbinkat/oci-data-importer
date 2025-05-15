@@ -1,0 +1,125 @@
+version: '3'
+
+tasks:
+  clean:kubeconfig:
+    desc: Clean up Kubernetes configuration
+    cmds:
+      - echo "Cleaning Kubernetes contexts, clusters, and users..."
+      - |
+        CURRENT_K8S_CONTEXT=$(kubectl config current-context 2>/dev/null || echo "")
+        if [ -n "$CURRENT_K8S_CONTEXT" ]; then
+          kubectl config delete-context $CURRENT_K8S_CONTEXT || true
+        fi
+      - |
+        for cluster in $(kubectl config get-clusters 2>/dev/null | grep -v NAME || echo ""); do
+          kubectl config delete-cluster $cluster || true
+        done
+      - |
+        for user in $(kubectl config get-users 2>/dev/null | grep -v NAME || echo ""); do
+          kubectl config delete-user $user || true
+        done
+      - |
+        # Reset kubeconfig if needed
+        if [ -f "$HOME/.kube/config" ]; then
+          cat > "$HOME/.kube/config" <<EOF
+        apiVersion: v1
+        kind: Config
+        preferences: {}
+        current-context: ""
+        clusters: []
+        contexts: []
+        users: []
+        EOF
+          echo "Kubernetes config has been reset"
+        fi
+
+  clean:talosconfig:
+    desc: Clean up Talos configuration
+    cmds:
+      - echo "Cleaning Talos contexts..."
+      - |
+        # Create empty context to switch to
+        if [ ! -d "$HOME/.talos" ]; then
+          mkdir -p "$HOME/.talos"
+        fi
+        
+        # Get current context
+        CURRENT_TALOS_CONTEXT=$(talosctl config context 2>/dev/null || echo "")
+        
+        # Create temporary config if needed
+        if [ -f "$HOME/.talos/config" ]; then
+          for ctx in $(talosctl config contexts 2>/dev/null | grep -v CURRENT | awk '{print $2}' || echo ""); do
+            if [ "$ctx" != "$CURRENT_TALOS_CONTEXT" ]; then
+              talosctl config context "$ctx" 2>/dev/null || true
+              break
+            fi
+          done
+          
+          # Now try to remove all contexts
+          for ctx in $(talosctl config contexts 2>/dev/null | grep -v CURRENT | awk '{print $2}' || echo ""); do
+            talosctl config remove "$ctx" -y 2>/dev/null || true
+          done
+          
+          # Reset talosconfig
+          cat > "$HOME/.talos/config" <<EOF
+        context: ""
+        EOF
+          echo "Talos config has been reset"
+        fi
+
+  clean:cluster-state:
+    desc: Clean up Talos cluster state
+    cmds:
+      - echo "Cleaning Talos cluster state..."
+      - rm -rf "$HOME/.talos/clusters/talos-default" || true
+
+  cluster:destroy:
+    desc: Destroy any existing Talos cluster
+    cmds:
+      - echo "Destroying Talos cluster..."
+      - talosctl cluster destroy --name talos-default || echo "No cluster to destroy or error destroying cluster"
+
+  clean:all:
+    desc: Thoroughly clean all configurations and state
+    cmds:
+      - task: cluster:destroy
+      - task: clean:kubeconfig
+      - task: clean:talosconfig
+      - task: clean:cluster-state
+      - echo "All Kubernetes and Talos configurations have been cleaned"
+
+  cluster:create:
+    desc: Create a new Talos cluster with ImageVolume feature gate enabled
+    cmds:
+      - echo "Creating Talos cluster with ImageVolume feature gate..."
+      - talosctl cluster create --config-patch=@{{.CONFIG_PATCH}} --kubernetes-version=1.33.0 --wait-timeout 30m
+    vars:
+      CONFIG_PATCH: /Users/katmorg/project/talos-config-patch.yaml
+
+  create-test-pod:
+    desc: Create a test pod with image volume
+    cmds:
+      - echo "Creating test pod with image volume..."
+      - kubectl apply -f /Users/katmorg/project/image-volume-test.yaml
+      - kubectl wait --for=condition=Ready pod/image-volume-test --timeout=60s || kubectl get pod image-volume-test -o yaml
+
+  test-feature-gate:
+    desc: Full test sequence for image volume feature
+    cmds:
+      - echo "Testing ImageVolume feature gate:"
+      - task: clean:all
+      - task: cluster:create 
+      - echo "Wait for cluster to stabilize..."
+      - sleep 10
+      - task: create-test-pod
+      - kubectl get pod image-volume-test -o yaml
+
+  version:check:
+    desc: Check Kubernetes and Talos versions
+    cmds:
+      - echo "Kubernetes Client Version:"
+      - kubectl version --client
+      - echo "Kubernetes Server Version (if available):"
+      - kubectl version || echo "No Kubernetes cluster available"
+      - echo "Talos Version:"
+      - talosctl version
