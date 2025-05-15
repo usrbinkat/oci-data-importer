@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: image-volume-test
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+  containers:
+  - name: busybox
+    image: busybox
+    command: ["sleep", "3600"]
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    volumeMounts:
+    - name: test-volume
+      mountPath: /mnt/test
+  volumes:
+  - name: test-volume
+    image:
+      reference: docker.io/library/alpine:latest
