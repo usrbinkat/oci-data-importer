@@ -104,17 +104,26 @@ As a pragmatic alternative, we pivoted to using the [lib-volume-populator](https
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/oci-data-importer.git
+git clone https://github.com/usrbinkat/oci-data-importer.git
 cd oci-data-importer
 
-# Set up development environment
-make setup
+# Check available commands
+task --list
 
-# Run tests
-make test
+# Create a test Kubernetes cluster with ImageVolume feature enabled
+task cluster:create
 
-# Build and deploy to local cluster
-make deploy
+# Run test pods with ImageVolume
+task create-test-pod
+
+# Test the ImageVolume feature gate end-to-end
+task test-feature-gate
+
+# Clean up the cluster and configurations
+task clean:all
+
+# Check versions of tools
+task version:check
 ```
 
 ## Comparison with Other Approaches
